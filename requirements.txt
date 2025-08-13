@@ -1,4 +1,4 @@
+openai
 azure-identity
 azure-ai-inference
 streamlit
-openai
