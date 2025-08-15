@@ -337,7 +337,7 @@ def main_dashboard():
                     Provide your response by listing JSONs matched.  Your response should only include JSON and nothing else.""",
                             "system_prompt_agent_2": """You are a Data Analysis assistant. Users will give you business problems.
                             Use the information provided to define an analytics approach to solving the problem. Your response should be in the form of an analytics approach to solving the problem, using the selected content as context.""",
-                            "knowledge_source": "signals_Knowledge.json" ,
+                            "knowledge_source": "signals_Knowledge_v2.json" ,
                             "agent_1_columns": ['Extracted-text'],
                             "id_column": "elastic_id",
                             "text_column": "Extracted-text"}
@@ -524,6 +524,7 @@ def main_dashboard():
                                 agent_1_columns=agent_json["agent_1_columns"],
                                 model=model_choice)
                             selected_docs = current_agent.agent_1_execution(user_input)
+                            st.write("Selected Documents: ", selected_docs)
                             response = current_agent.agent_2_execution(user_input, selected_docs, id_column, text_column)
                             assistant_reply = response
 
