@@ -7,6 +7,7 @@ from azure.ai.inference import ChatCompletionsClient
 from azure.ai.inference.models import SystemMessage, UserMessage
 from azure.core.credentials import AzureKeyCredential
 from dotenv import load_dotenv
+from azure.storage.blob import BlobServiceClient
 
 # Load environment variables from the .env file
 load_dotenv()
@@ -22,6 +23,27 @@ llm_client = ChatCompletionsClient(
 )
 
 # llama_model_name = "Llama-4-Scout-17B-16E-Instruct"
+
+# Initialize Azure Blob Storage client
+connection_string = os.getenv("AZURE_DB_CONNECTION_STRING")
+container_name = "sandbox"
+blob_service_client = BlobServiceClient.from_connection_string(connection_string)
+container_client = blob_service_client.get_container_client(container_name)
+
+def get_blob_content(blob_name):
+    """
+    Retrieve the content of a blob from Azure Blob Storage.
+    
+    :param blob_name: Name of the blob to retrieve
+    :return: Content of the blob as a string
+    """
+    try:
+        blob_client = container_client.get_blob_client(blob_name)
+        blob_data = blob_client.download_blob().content_as_text()
+        return json.loads(blob_data)
+    except Exception as e:
+        st.error(f"Error retrieving blob content: {e}")
+        return None
 
 
 
@@ -337,7 +359,7 @@ def main_dashboard():
                     Provide your response by listing JSONs matched.  Your response should only include JSON and nothing else.""",
                             "system_prompt_agent_2": """You are a Data Analysis assistant. Users will give you business problems.
                             Use the information provided to define an analytics approach to solving the problem. Your response should be in the form of an analytics approach to solving the problem, using the selected content as context.""",
-                            "knowledge_source": "signals_Knowledge_v2.json" ,
+                            "knowledge_source": "signals_knowledge.json" ,
                             "agent_1_columns": ['Extracted-text'],
                             "id_column": "elastic_id",
                             "text_column": "Extracted-text"}
@@ -409,6 +431,7 @@ def main_dashboard():
     st.title("Agent Management Dashboard")
 
     st.session_state["models"]=["Llama-4-Scout-17B-16E-Instruct", "Llama-4-Maverick-17B-128E-Instruct-FP8"]
+    
 
 
     if st.session_state["mode"] is None:
@@ -516,15 +539,13 @@ def main_dashboard():
 
                     try:
                         if model_choice in st.session_state["models"]:
-                            with open(agent_json["knowledge_source"], "r") as file:
-                                knowledge_source_json = json.load(file)
+                            knowledge_source_json = get_blob_content(agent_json["knowledge_source"])
                             current_agent = Agent(system_prompt_agent_1=agent_json["system_prompt_agent_1"],
                                 system_prompt_agent_2=agent_json["system_prompt_agent_2"],
                                 knowledge_source_json=knowledge_source_json,
                                 agent_1_columns=agent_json["agent_1_columns"],
                                 model=model_choice)
                             selected_docs = current_agent.agent_1_execution(user_input)
-                            st.write("Selected Documents: ", selected_docs)
                             response = current_agent.agent_2_execution(user_input, selected_docs, id_column, text_column)
                             assistant_reply = response
 
