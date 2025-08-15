@@ -1,5 +1,6 @@
 python-dotenv
-openai
 azure-identity
 azure-ai-inference
 streamlit
+openai
+azure-storage-blob
