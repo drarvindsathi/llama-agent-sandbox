@@ -21,7 +21,7 @@ llm_client = ChatCompletionsClient(
     api_version="2024-05-01-preview"
 )
 
-llama_model_name = "Llama-4-Scout-17B-16E-Instruct"
+# llama_model_name = "Llama-4-Scout-17B-16E-Instruct"
 
 
 
@@ -34,23 +34,44 @@ def authenticate_user(email):
         return False
 
 
+
 def edit_agent_component(agent):
-    st.subheader(f"✏️ Edit Agent: {agent['name']}")
+    st.subheader(f"✏️ Display Agent: {agent['name']}")
 
     # Editable context
-    updated_context = st.text_area(
-        "Edit Context / Instructions",
-        value=agent["context"],
-        key=f"context_{agent['name']}",
-    )
+    edited_agent_str = json.dumps(agent, indent=2)
+        # Parse JSON and handle syntax errors
+    # Text area for JSON input/editing
+    edited_agent_str = st.text_area("Edit the JSON below:", value=edited_agent_str, height=400)
+
+    # Parse JSON and handle syntax errors
+    try:
+        edited_agent = json.loads(edited_agent_str)
+        st.success("Successfully parsed JSON!")
+
+        # Display parsed JSON data
+        st.json(edited_agent)
+
+        # Convert dictionary back to JSON string with indentation
+        json_to_download = json.dumps(edited_agent, indent=4)
+
+        # Download button
+        st.download_button(
+            label="Download JSON",
+            data=json_to_download,
+            file_name="agent_config.json",
+            mime="application/json"
+        )
+    except json.JSONDecodeError as e:
+        st.error(f"JSON Decode Error: {e}")
 
     # Model switcher
-    updated_model = st.selectbox(
-        "Switch Model",
-        options=["Llama-4-Scout-17B-16E-Instruct", "Llama-4-Maverick-17B-128E-Instruct-FP8"],
-        index=["Llama-4-Scout-17B-16E-Instruct", "Llama-4-Maverick-17B-128E-Instruct-FP8"].index(agent["model"]),
-        key=f"model_{agent['name']}",
-    )
+    # updated_model = st.selectbox(
+    #     "Switch Model",
+    #     options=["Llama-4-Scout-17B-16E-Instruct", "Llama-4-Maverick-17B-128E-Instruct-FP8"],
+    #     index=["Llama-4-Scout-17B-16E-Instruct", "Llama-4-Maverick-17B-128E-Instruct-FP8"].index(agent["model"]),
+    #     key=f"model_{agent['name']}",
+    # )
 
     # Optional file upload
     updated_files = st.file_uploader(
@@ -61,13 +82,15 @@ def edit_agent_component(agent):
 
     # Update button
     if st.button("Update Agent", key=f"update_{agent['name']}"):
-        agent["context"] = updated_context
-        agent["model"] = updated_model
+        agent = edited_agent
+        # if updated_model:
+        #     agent["model"] = updated_model
         if updated_files:
             agent["files"] = updated_files
         st.session_state["show_popup"] = False
         st.session_state["mode"] = "use_existing"
         st.rerun()
+
 
 
 def get_embedding(text):
@@ -151,21 +174,21 @@ def exclude_keys(json_list, keys_to_exclude):
     return new_json_list
 
 # extract_text - retrieves extracted text from original JSON data for chosen articles   
-def extract_text(chosen_articles, original_json_data):
+def extract_text(chosen_articles, original_json_data, id_column, text_column):
     """Retrieves extracted text from original JSON data for chosen articles."""
     extracted_texts = []
     
     # Create a dictionary for fast lookups of URLs and their corresponding extracted text.
-    original_data_dict = {item['URL']: item.get('Extracted-Text', None) for item in original_json_data}
+    original_data_dict = {item[id_column]: item.get(text_column, None) for item in original_json_data}
 
     for article in chosen_articles:
-        url = article['URL']
-        extracted_text = original_data_dict.get(url)  # Efficiently retrieve the text
+        id = article[id_column]
+        extracted_text = original_data_dict.get(id)  # Efficiently retrieve the text
         if extracted_text:
-            extracted_texts.append({"URL": url, "Extracted-Text": extracted_text})
+            extracted_texts.append({id_column: id, text_column: extracted_text})
         else:
-            extracted_texts.append({"URL": url, "Extracted-Text": None}) # Or handle missing text differently.
-            st.write(f"Warning: No extracted text found for URL: {url}")
+            extracted_texts.append({id_column: id, text_column: None}) # Or handle missing text differently.
+            st.write(f"Warning: No extracted text found for {id_column}: {id}")
 
     return extracted_texts
 
@@ -240,7 +263,7 @@ class Agent:
         selected_documents = clean_llm_output(selected_documents)
         return json.loads(selected_documents)
 
-    def agent_2_execution(self, user_query, selected_documents):
+    def agent_2_execution(self, user_query, selected_documents, id_column, text_column):
         """
         Execute logic for agent 2.
 
@@ -249,7 +272,7 @@ class Agent:
         :return: Query response as a string
         """
         # Extract text from selected documents
-        selected_documents_text = extract_text(selected_documents, self.knowledge_source_json)
+        selected_documents_text = extract_text(selected_documents, self.knowledge_source_json, id_column, text_column)
 
         # Prepare chat memory
         chat_memory = [
@@ -278,14 +301,18 @@ def main_dashboard():
         "transitioning",
         "show_tlka_chat",
         "tlka_chat_history",
+        "models",
+        "model",
+        "selecting_model"
     ]:
         # Set agents and chat history to empty if present
         if key not in st.session_state:
-            st.session_state[key] = [] if key in ["agents", "chat_history"] else None
+            st.session_state[key] = [] if key in ["chat_history"] else {} if key in ["agents"] else None
 
     # Add premade Thought Leadership agent if not already added
-    if "thought_leadership_added" not in st.session_state:
-        tlka_agent_json = {"name": "Thought Leadership Knowledge Assistant",
+    if "thought_leadership_agent" not in st.session_state:
+        tlka_agent_json = {"id": "thought_leadership_agent",
+                           "name": "Thought Leadership Knowledge Assistant",
                         "description": "An AI assistant that helps users understand KPMG's point of view on  specific topics.",
                         "system_prompt_agent_1": """You are a Thought Leadership Knowledge Assistant and you assist the team in understanding and getting to know KPMG Point of View on specific topics.
 
@@ -296,21 +323,26 @@ def main_dashboard():
         Your response should be in the form of a point of view on the topic, using the selected content as context and cite URLs of the articles used.""",
                             "knowledge_source": "TLKA_Knowledge.json" ,
                             "agent_1_columns": ['Extracted-Text', 'Entities', 'Keywords', 'JSON'],
-        #                    "model": "Llama-4-Maverick-17B-128E-Instruct-FP8"}
-                            "model": "Llama-4-Scout-17B-16E-Instruct"}
+                            "id_column": "URL",
+                            "text_column": "Extracted-Text"}
 
-        with open(tlka_agent_json["knowledge_source"], "r") as file:   
-            knowledge_source_json = json.load(file) 
+        st.session_state["agents"]["thought_leadership_agent"] = tlka_agent_json
 
-        thought_leadership_agent = Agent(system_prompt_agent_1=tlka_agent_json["system_prompt_agent_1"],
-                        system_prompt_agent_2=tlka_agent_json["system_prompt_agent_2"],
-                        knowledge_source_json=knowledge_source_json,
-                        agent_1_columns=tlka_agent_json["agent_1_columns"],
-                        model=tlka_agent_json["model"])
-        st.session_state["thought_leadership_agent"] = thought_leadership_agent
-        st.session_state["agents"].append(tlka_agent_json)
-        st.session_state["thought_leadership_added"] = True
-        st.session_state["show_tlka_chat"] = True
+    if "signals_agent" not in st.session_state:
+        signals_agent_json = {"id": "signals_agent",
+                              "name": "Signals Knowledge Assistant",
+                   "description": "An AI assistant that helps users explore KPMG's Signals Repository contents in solving business problems.",
+                   "system_prompt_agent_1": """You are a Data Analysis assistant. Users will give you business problems and you will use the information provided below to find top 5 relevant tables.
+
+                    Provide your response by listing JSONs matched.  Your response should only include JSON and nothing else.""",
+                            "system_prompt_agent_2": """You are a Data Analysis assistant. Users will give you business problems.
+                            Use the information provided to define an analytics approach to solving the problem. Your response should be in the form of an analytics approach to solving the problem, using the selected content as context.""",
+                            "knowledge_source": "signals_Knowledge.json" ,
+                            "agent_1_columns": ['Extracted-text'],
+                            "id_column": "elastic_id",
+                            "text_column": "Extracted-text"}
+
+        st.session_state["agents"]["signals_agent"] = signals_agent_json
 
     if st.session_state["transitioning"]:
         with st.spinner("Loading chat interface..."):
@@ -365,8 +397,8 @@ def main_dashboard():
 
         st.header("Agents")
         if st.session_state["agents"]:
-            for agent in st.session_state["agents"]:
-                if st.button(f"🛠️ Edit {agent['name']}"):
+            for agent in list(st.session_state["agents"].values()):
+                if st.button(f"🛠️ Display {agent['name']}"):
                     st.session_state["selected_agent"] = agent
                     st.session_state["mode"] = "edit_agent"
                     st.session_state["show_popup"] = True
@@ -376,16 +408,25 @@ def main_dashboard():
 
     st.title("Agent Management Dashboard")
 
+    st.session_state["models"]=["Llama-4-Scout-17B-16E-Instruct", "Llama-4-Maverick-17B-128E-Instruct-FP8"]
+
+
     if st.session_state["mode"] is None:
         col1, col2 = st.columns(2)
         with col1:
             if st.button("Use an Existing Agent"):
                 st.session_state["mode"] = "use_existing"
+                st.rerun()
 
         with col2:
             if st.button("Create a New Model"):
                 st.session_state["show_popup"] = True
                 st.session_state["mode"] = "create_new"
+                st.rerun()
+    else:
+        if st.button("Change Mode"):
+            st.session_state["mode"] = None
+            st.rerun()
 
     if st.session_state["show_popup"]:
         if st.session_state["mode"] == "edit_agent":
@@ -426,60 +467,79 @@ def main_dashboard():
 
                 st.rerun()
 
-    if (st.session_state["mode"] == "use_existing"
-        and not st.session_state["selected_agent"]):
+    if (st.session_state["mode"] == "use_existing" and not st.session_state["selected_agent"]):
         st.subheader("Select an Existing Agent")
-        for agent in st.session_state["agents"]:
-            if st.button(f"{agent['name']} ({agent['model']})"):
+        for agent in list(st.session_state["agents"].values()):
+            if st.button(f"{agent['name']}", key="select_"+agent['name']):
                 st.session_state["selected_agent"] = agent
+                print(agent)
                 st.session_state["chat_history"] = []
+                st.rerun()
 
     if st.session_state["selected_agent"] and st.session_state["mode"] in [
         "use_existing",
         "create_new",
     ]:
-        st.subheader(f"💬 Chat with {st.session_state['selected_agent']['name']}")
-        for message in st.session_state["chat_history"]:
-            with st.chat_message(message["role"]):
-                st.markdown(message["content"])
+            st.subheader(f"💬 Chat with {st.session_state['selected_agent']['name']}")
+            model_selection_label = "Select Model" if not st.session_state["model"] else "Change Model"
+            if not st.session_state["selecting_model"] and st.button(model_selection_label):
+                st.session_state["selecting_model"] = True
+            if st.session_state.get("selecting_model", False):
+                for model in st.session_state["models"]:
+                    if st.button(f"Use {model} model", key="use_model_"+model):
+                        st.session_state["selecting_model"] = False
+                        st.session_state["model"] = model
+                        st.session_state["chat_history"] = []
+                        st.rerun()
+            if st.session_state["model"]:
+                st.subheader("Selected model: " + st.session_state["model"])
+                for message in st.session_state["chat_history"]:
+                    with st.chat_message(message["role"]):
+                        st.markdown(message["content"])
 
-        user_input = st.chat_input("Ask your agent something...")
-        if user_input:
-            st.session_state["chat_history"].append(
-                {"role": "user", "content": user_input}
-            )
-            with st.chat_message("user"):
-                st.markdown(user_input)
+                user_input = st.chat_input("Ask your agent something...")
+                if user_input:
+                    st.session_state["chat_history"].append(
+                        {"role": "user", "content": user_input}
+                    )
+                    with st.chat_message("user"):
+                        st.markdown(user_input)
 
-            context = st.session_state["selected_agent"]["system_prompt_agent_1"]
+                    context = st.session_state["selected_agent"]["system_prompt_agent_1"]
 
+                    model_choice = st.session_state["model"]
 
-            model_choice = st.session_state["selected_agent"]["model"]
+                    id_column = st.session_state["selected_agent"]["id_column"]
+                    text_column = st.session_state["selected_agent"]["text_column"]
 
-            try:
-                if model_choice == "Llama-4-Scout-17B-16E-Instruct":
-                    thought_leadership_agent = st.session_state["thought_leadership_agent"]
-                    selected_docs = thought_leadership_agent.agent_1_execution(user_input)
-                    response = thought_leadership_agent.agent_2_execution(user_input, selected_docs)
-                    assistant_reply = response
+                    agent_json = st.session_state["selected_agent"]
 
-                elif model_choice == "LLaMA Maverick":
-                    thought_leadership_agent = st.session_state["thought_leadership_agent"]
-                    selected_docs = thought_leadership_agent.agent_1_execution(user_input)
-                    response = thought_leadership_agent.agent_2_execution(user_input, selected_docs)
-                    assistant_reply = response
+                    try:
+                        if model_choice in st.session_state["models"]:
+                            with open(agent_json["knowledge_source"], "r") as file:
+                                knowledge_source_json = json.load(file)
+                            current_agent = Agent(system_prompt_agent_1=agent_json["system_prompt_agent_1"],
+                                system_prompt_agent_2=agent_json["system_prompt_agent_2"],
+                                knowledge_source_json=knowledge_source_json,
+                                agent_1_columns=agent_json["agent_1_columns"],
+                                model=model_choice)
+                            selected_docs = current_agent.agent_1_execution(user_input)
+                            response = current_agent.agent_2_execution(user_input, selected_docs, id_column, text_column)
+                            assistant_reply = response
 
-                else:
-                    assistant_reply = f"⚠️ Unknown model selected: {model_choice}"
+                        else:
+                            assistant_reply = f"⚠️ Unknown model selected: {model_choice}"
 
-            except Exception as e:
-                assistant_reply = f"⚠️ Error generating response: {e}"
+                    except Exception as e:
+                        assistant_reply = f"⚠️ Error generating response: {e}"
 
-            st.session_state["chat_history"].append(
-                {"role": "assistant", "content": assistant_reply}
-            )
-            with st.chat_message("assistant"):
-                st.markdown(assistant_reply)
+                    st.session_state["chat_history"].append(
+                        {"role": "assistant", "content": assistant_reply}
+                    )
+                    with st.chat_message("assistant"):
+                        st.markdown(assistant_reply)
+            
+
 
 
 # Entry point
