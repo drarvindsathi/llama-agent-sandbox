@@ -282,8 +282,16 @@ class Agent:
 
         # Extract selected documents
         selected_documents = response.choices[0].message.content
-        selected_documents = clean_llm_output(selected_documents)
-        return json.loads(selected_documents)
+        cleaned_documents = clean_llm_output(selected_documents)
+        try:
+            selected_json =  json.loads(selected_documents)
+        except:
+            # Handle the case where the output is not valid JSON
+            # This could be due to the LLM output not matching the expected format
+            # Log the error or handle it as needed
+            print(f"Error: Unable to parse selected documents. Expected JSON format but got: {cleaned_documents}")
+            selected_json = []
+        return selected_json
 
     def agent_2_execution(self, user_query, selected_documents, id_column, text_column):
         """
@@ -295,6 +303,9 @@ class Agent:
         """
         # Extract text from selected documents
         selected_documents_text = extract_text(selected_documents, self.knowledge_source_json, id_column, text_column)
+        if not selected_documents_text:
+            st.error("No text extracted from selected documents.")
+            return 
 
         # Prepare chat memory
         chat_memory = [
@@ -546,9 +557,12 @@ def main_dashboard():
                                 agent_1_columns=agent_json["agent_1_columns"],
                                 model=model_choice)
                             selected_docs = current_agent.agent_1_execution(user_input)
-                            st.write(f"Chosen documents.: {selected_docs} ")
-                            response = current_agent.agent_2_execution(user_input, selected_docs, id_column, text_column)
-                            assistant_reply = response
+                            st.write("Selected Documents:", selected_docs)
+                            if selected_docs:
+                                response = current_agent.agent_2_execution(user_input, selected_docs, id_column, text_column)
+                                assistant_reply = response
+                            else:
+                                assistant_reply = "⚠️ No relevant documents found to answer your query."
 
                         else:
                             assistant_reply = f"⚠️ Unknown model selected: {model_choice}"
