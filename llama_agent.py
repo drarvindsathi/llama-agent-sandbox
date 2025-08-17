@@ -277,7 +277,8 @@ class Agent:
         # Request response from the chat API
         response = llm_client.complete(
             messages=chat_memory,
-            model=self.model
+            model=self.model,
+            temperature = 0
         )
 
         # Extract selected documents
@@ -316,7 +317,8 @@ class Agent:
         # Request response from the chat API
         response = llm_client.complete(
             messages=chat_memory,
-            model=self.model
+            model=self.model,
+            temperature = 0.5
         )
 
         # Extract query response
