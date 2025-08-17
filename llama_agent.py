@@ -285,12 +285,12 @@ class Agent:
         selected_documents = response.choices[0].message.content
         cleaned_documents = clean_llm_output(selected_documents)
         try:
-            selected_json =  json.loads(selected_documents)
+            selected_json =  json.loads(cleaned_documents)
         except:
             # Handle the case where the output is not valid JSON
             # This could be due to the LLM output not matching the expected format
             # Log the error or handle it as needed
-            print(f"Error: Unable to parse selected documents. Expected JSON format but got: {cleaned_documents}")
+            print(f"Error: Unable to parse selected documents. Expected JSON format but could not locate JSON: {selected_documents}")
             selected_json = []
         return selected_json
 
