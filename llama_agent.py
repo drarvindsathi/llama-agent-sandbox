@@ -278,7 +278,8 @@ class Agent:
         response = llm_client.complete(
             messages=chat_memory,
             model=self.model,
-            temperature = 0
+            max_tokens=10000,
+            temperature=0
         )
 
         # Extract selected documents
@@ -318,7 +319,8 @@ class Agent:
         response = llm_client.complete(
             messages=chat_memory,
             model=self.model,
-            temperature = 0.5
+            max_tokens=10000,
+            temperature=0.5
         )
 
         # Extract query response
@@ -443,7 +445,8 @@ def main_dashboard():
 
     st.title("Agent Management Dashboard")
 
-    st.session_state["models"]=["Llama-4-Scout-17B-16E-Instruct", "Llama-4-Maverick-17B-128E-Instruct-FP8"]
+#    st.session_state["models"]=["Llama-4-Scout-17B-16E-Instruct", "Llama-4-Maverick-17B-128E-Instruct-FP8"]
+    st.session_state["models"]=["Llama-4-Scout-17B-16E-Instruct", "Llama-3.3-70B-Instruct"]
     
 
 
@@ -471,7 +474,7 @@ def main_dashboard():
         else:
             st.subheader("🛠️ Create a New Agent")
             agent_name = st.text_input("Agent Name")
-            model_choice = st.selectbox("Model", ["LLaMA Scout", "LLaMA Maverick", "GPT-4"])
+            model_choice = st.selectbox("Model", ["LLaMA Scout", "LLaMA Maverick"])
             context = st.text_area("Context / Instructions")
             uploaded_files = st.file_uploader(
                 "Upload Files", accept_multiple_files=True
